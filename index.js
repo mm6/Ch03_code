@@ -1,12 +1,14 @@
 
+// Guide to Internet of Things Chapter 3
 // File name: index.js
 // In order to execute this code, enter the CLI command
 // node index.js
-// and then visit the server with an HTTP POST request.
+// Get requests from browsers will be acknowledged as a courtesy.
+// A browser may visit with http://localhost:3000/microcontrollerEvent
+// The main purpose is to handle HTTP POST requests to the following URL:
 // http://localhost:3000/microcontrollerEvent
-// Get requests from browsers will be acknowledged.
 
-// Each visit is logged in the file ArgonLogger.txt.
+// Each visit logs data to the file ArgonLogger.txt.
 
 // Setup the express web server.
 const express = require('express')
@@ -38,9 +40,10 @@ var visitor = 0;
 // Handle an HTTP POST request from an Argon microcontroller.
 app.post('/microcontrollerEvent', (req, res) => {
 
+  // announce a new visitor
   console.log("\nNew Post request");
 
-  // Increment visitors
+  // Increment the visitor count
   visitor++;
   console.log("Visitor Number" + visitor);
 
