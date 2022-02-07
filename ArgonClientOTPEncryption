@@ -1,0 +1,153 @@
+// Guide to Inernet of Things Chapter 3
+// ArgonClientOTPEncryption
+// This Argon firmware demonstrates One Time Pad encryption.
+
+#include <Base64RK.h>
+#include <HttpClient.h>
+
+
+// Http related code
+ HttpClient http;
+
+ http_header_t headers[] = {
+    { "Content-Type", "application/json" },
+    { NULL, NULL }
+ };
+
+ http_request_t request;
+ http_response_t response;
+
+// Argon related code
+int photoResistor = A0;
+int analogValue = 0;
+char deviceID[60];
+
+void setup() {
+
+   Serial.begin(9600);
+
+   request.ip = IPAddress(192,168,86,164);
+   request.port = 3000;
+
+   strcpy(deviceID,System.deviceID().c_str());
+   Serial.printlnf("This device has the id %s", deviceID);
+
+ }
+
+ // Provided with a response, display it to the command line interface.
+ void printResponse(http_response_t &response) {
+   Serial.println("HTTP Response: ");
+   Serial.println(response.status);
+   Serial.println(response.body);
+ }
+
+
+ void doPostRequest(char encryptedByteArrayBase64[]) {
+
+   // Provide the path to the service
+   request.path = "/microcontrollerEvent";
+
+   // Build the JSON request
+   char json[1000] = "{\"encryptedData\":\"";
+   // Add the encrypted data
+   strcat(json,encryptedByteArrayBase64);
+   // add the JSON ending
+   strcat(json,"\"}");
+   // assign the JSON string to the HTTP request body
+   request.body = json;
+   // post the request
+   http.post(request, response, headers);
+   // show response
+   printResponse(response);
+ }
+
+
+ void loop() {
+
+    analogValue = analogRead(photoResistor);
+    Serial.printlnf("AnalogValue == %u", analogValue);
+
+    // clear text message local to the device
+    char clearText[80];
+    sprintf(clearText, "Argon ID = %s Light sensor value = %d", deviceID, analogValue);
+    Serial.printlnf("Clear text: %s",clearText);
+
+     // determine its length of the string holding the clear text
+    int lengthOfDataEncrypted = strlen(clearText);
+
+    // Allocate space and move clear text into a byte array
+    byte *clearTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte));
+    for(int t = 0; t < lengthOfDataEncrypted; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
+
+    // The key is local to the device
+    char key[] = "This must be truly random, as long as the clear text and used only once.";
+
+    // determine its length
+    int lengthOfKey = strlen(key);
+
+    // Allocate space and move the key text into a byte array
+    byte *keyBytes = (byte *)calloc(lengthOfKey, sizeof(byte));
+    for(int t = 0; t < lengthOfKey; t = t + 1) keyBytes[t] = (byte) key[t];
+
+    // Encrypt the clear text bytes using a one time pad and a key
+    byte* cipherTextBytes = encrypt(clearTextBytes,lengthOfDataEncrypted,keyBytes,lengthOfKey);
+
+
+    // Decrypt the result into an array of bytes for testing
+    byte *decryptedClearTextBytes = decrypt(cipherTextBytes,lengthOfDataEncrypted,keyBytes,lengthOfKey);
+
+    // Extract the bytes from the byte array into a newly allocated string
+    char *decryptedClearText = (char *)calloc(lengthOfDataEncrypted + 1, sizeof(byte));
+    for(int k = 0; k < lengthOfDataEncrypted; k = k + 1) decryptedClearText[k] = (char) decryptedClearTextBytes[k];
+
+    // add the null byte back. The null byte was not part of the data that was encrypted
+    decryptedClearText[lengthOfDataEncrypted +1] = '\0';
+
+    // Show the result for testing
+    Serial.printlnf("Decrypted clear text: %s",decryptedClearText);
+
+    // Free up the memory that was allocated for the arrays.
+    free(clearTextBytes);
+    free(keyBytes);
+    free(cipherTextBytes);
+    free(decryptedClearTextBytes);
+    free(decryptedClearText);
+
+    // encode a byte array in Base64
+   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfDataEncrypted, true);
+   char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
+   Base64::encode(cipherTextBytes, lengthOfDataEncrypted, encryptedByteArrayBase64, sizeOfBase64, true );
+   Serial.println(encryptedByteArrayBase64);
+
+   // Make an HTTP Post request along with JSON containing encrypted data
+   doPostRequest(encryptedByteArrayBase64);
+
+   delay(5000);
+ }
+
+// One time pad encryption
+byte* encrypt(byte clearTextBytes[], int lengthOfDataEncrypted, byte keyBytes[], int lengthOfKey) {
+
+     int keyIndex = 0;
+     byte *cipherTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte) );
+     for (int index = 0; index < (lengthOfDataEncrypted); index = index + 1) {
+         cipherTextBytes[index] = clearTextBytes[index] ^ keyBytes[keyIndex];
+         // rotate through the key
+         keyIndex = (keyIndex + 1) % lengthOfKey;
+     }
+     return cipherTextBytes;
+}
+
+// One time pad decryption
+byte* decrypt(byte cipherTextBytes[], int lengthOfDataEncrypted, byte keyBytes[], int lengthOfKey) {
+
+     int keyIndex = 0;
+     byte *decryptedClearTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte));
+     for (int index = 0; index < (lengthOfDataEncrypted); index = index + 1) {
+         decryptedClearTextBytes[index] = cipherTextBytes[index] ^ keyBytes[keyIndex];
+         // rotate through the key
+         keyIndex = (keyIndex + 1) % lengthOfKey;
+
+     }
+     return decryptedClearTextBytes;
+}
