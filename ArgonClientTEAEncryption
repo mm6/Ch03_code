@@ -1,0 +1,219 @@
+// Guide to Internet of Things Chapter 3 
+// ArgonClientTEAEncryption
+// This Argon firmware demonstrates TEA encryption.
+
+#include <Base64RK.h>
+#include <HttpClient.h>
+
+
+// Http related code
+ HttpClient http;
+
+ http_header_t headers[] = {
+    { "Content-Type", "application/json" },
+    { NULL, NULL }
+ };
+
+ http_request_t request;
+ http_response_t response;
+
+
+// Argon related code
+int photoResistor = A0;
+int analogValue = 0;
+char deviceID[60];
+
+
+void setup() {
+
+   Serial.begin(9600);
+
+   request.ip = IPAddress(192,168,86,164);
+   request.port = 3000;
+
+   //deviceID = System.deviceID().c_str();
+   strcpy(deviceID,System.deviceID().c_str());
+   Serial.printlnf("This device has the cool id %s", deviceID);
+
+ }
+
+ // Provided with a response, display it to the command line interface.
+ void printResponse(http_response_t &response) {
+   Serial.println("HTTP Response: ");
+   Serial.println(response.status);
+   Serial.println(response.body);
+ }
+
+
+ void doPostRequest(char encryptedByteArrayBase64[]) {
+
+   // Provide the path to the service
+   request.path = "/microcontrollerEvent";
+
+   // Build the JSON request
+   char json[1000] = "{\"encryptedData\":\"";
+   // Add the encrypted data
+   strcat(json,encryptedByteArrayBase64);
+   // add the JSON ending
+   strcat(json,"\"}");
+   // assign the JSON string to the HTTP request body
+   request.body = json;
+   // post the request
+   http.post(request, response, headers);
+   // show response
+   printResponse(response);
+ }
+
+
+ void loop() {
+
+    analogValue = analogRead(photoResistor);
+    Serial.printlnf("AnalogValue == %u", analogValue);
+
+    // clear text message local to the device
+    char clearText[80];
+    sprintf(clearText, "Argon ID = %s  Light sensor = %d", deviceID, analogValue);
+    Serial.printlnf("Clear text: %s",clearText);
+
+     // determine its length of the string holding the clear text
+    int lengthOfDataEncrypted = strlen(clearText);
+
+    // Allocate space and move clear text into a byte array
+    byte *clearTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte));
+    for(int t = 0; t < lengthOfDataEncrypted; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
+
+
+    // TEA needs four 32 but ints as key
+    unsigned long key[] = {12,34,56,91};
+
+    byte* TEAcipherTextBytes = encryptWithTEA(clearTextBytes, lengthOfDataEncrypted, key) ;
+
+    // compute the size of the encrypted data. Should always be a multiple of 8
+    // the encryption logic may add bytes to the end
+    int numEights = lengthOfDataEncrypted / 8;
+    if(lengthOfDataEncrypted != (numEights * 8)) {
+        lengthOfDataEncrypted = lengthOfDataEncrypted + ( 8 - (lengthOfDataEncrypted % 8));
+    }
+
+    Serial.printlnf("LENGTH of DATA ENCRYPTED  == %d",  lengthOfDataEncrypted);
+
+    byte* TEAdecryptedCipherTextBytes = decryptWithTEA(TEAcipherTextBytes, lengthOfDataEncrypted, key) ;
+
+     // Extract the bytes from the byte array into a newly allocated string
+    char *TEAdecryptedClearText = (char *)calloc(lengthOfDataEncrypted + 1, sizeof(byte));
+
+    for(int k = 0; k < lengthOfDataEncrypted; k = k + 1) TEAdecryptedClearText[k] = (char) TEAdecryptedCipherTextBytes[k];
+    TEAdecryptedCipherTextBytes[lengthOfDataEncrypted+1] = '\0';
+
+    Serial.printlnf("**** TEA: Decrypted clear text: %s",TEAdecryptedCipherTextBytes);
+
+
+    // encode a byte array in Base64
+   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfDataEncrypted, true);
+   char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
+   Base64::encode(TEAdecryptedCipherTextBytes, lengthOfDataEncrypted, encryptedByteArrayBase64, sizeOfBase64, true );
+   Serial.println(encryptedByteArrayBase64);
+
+   doPostRequest(encryptedByteArrayBase64);
+
+    // Free up the memory that was allocated for the arrays.
+    free(clearTextBytes);
+    free(encryptedByteArrayBase64);
+    free(TEAcipherTextBytes);
+    free(TEAdecryptedClearText);
+    free(TEAdecryptedCipherTextBytes);
+
+
+   delay(5000);
+ }
+
+byte* encryptWithTEA(byte clearTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
+
+    char Text[8];
+    int segments = lengthOfDataEncrypted / 8;
+    int over = lengthOfDataEncrypted % 8;
+    byte *cipherTextBytes = (byte *)calloc(lengthOfDataEncrypted+over, sizeof(byte) );
+    int cipherTextBytesPtr = 0;
+
+    for(int i = 0; i < segments; i++) {
+            int p = i * 8;
+            for(int b = 0; b < 8; b++) {
+                Text[b] = clearTextBytes[p+b];
+            }
+            // Call encrypt on Text
+            encryptTEA(k,(unsigned long *)Text);
+            for(int ctr = 0; ctr < 8; ctr++) {
+                cipherTextBytes[cipherTextBytesPtr++] = Text[ctr];
+            }
+        }
+        if(over > 0) {
+            for (int m = 0; m < 8; m++) Text[m] = ' ';
+            for (int b = 0; b < over; b++) {
+                Text[b] = clearTextBytes[(segments*8) + b];
+            }
+            encryptTEA(k,(unsigned long *)Text);
+            for(int ctr = 0; ctr < 8; ctr++) {
+                cipherTextBytes[cipherTextBytesPtr++] = Text[ctr];
+            }
+        }
+    return cipherTextBytes;
+}
+
+byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
+
+    char Text[8];
+    int segments = lengthOfDataEncrypted / 8;
+    int over = lengthOfDataEncrypted % 8;
+    byte *decryptedCipherTextBytes = (byte *)calloc(lengthOfDataEncrypted+over, sizeof(byte) );
+    int decryptedCipherTextBytesPtr = 0;
+
+    for(int i = 0; i < segments; i++) {
+            int p = i * 8;
+            for(int b = 0; b < 8; b++) {
+                Text[b] = cipherTextBytes[p+b];
+            }
+            // Call decrypt on Text
+            decryptTEA(k,(unsigned long *)Text);
+            for(int ctr = 0; ctr < 8; ctr++) {
+                decryptedCipherTextBytes[decryptedCipherTextBytesPtr++] = Text[ctr];
+            }
+    }
+    if(over > 0) {
+            for (int m = 0; m < 8; m++) Text[m] = ' ';
+            for (int b = 0; b < over; b++) {
+                Text[b] = cipherTextBytes[(segments*8) + b];
+            }
+            decryptTEA(k,(unsigned long *)Text);
+            for(int ctr = 0; ctr < 8; ctr++) {
+                decryptedCipherTextBytes[decryptedCipherTextBytesPtr++] = Text[ctr];
+            }
+    }
+    return decryptedCipherTextBytes;
+}
+
+
+// TEA from Coulouris 3rd edition
+void encryptTEA(unsigned long k[], unsigned long text[]) {
+    unsigned long y = text[0], z = text[1];
+    unsigned long delta = 0x9e3779b9, sum = 0;
+    int n;
+    for(n = 0; n < 32; n++){
+        sum += delta;
+        y += ((z<<4)+k[0])^(z+sum)^((z>>5)+k[1]);
+        z += ((y<<4)+k[2])^(y+sum)^((y>>5) + k[3]);
+    }
+    text[0] = y;
+    text[1] = z;
+}
+// TEA from Coulouris 3rd edition
+void decryptTEA(unsigned long k[], unsigned long text[]) {
+     unsigned long y = text[0], z = text[1];
+     unsigned long delta = 0x9e3779b9, sum = delta << 5;
+     int n;
+     for(n = 0; n < 32; n++){
+          z -= ((y << 4) + k[2]) ^ (y + sum) ^ ((y >> 5) + k[3]);
+          y -= ((z << 4) + k[0]) ^ (z + sum) ^ ((z >> 5) + k[1]);
+          sum -= delta;
+     }
+     text[0] = y; text[1] = z;
+}
