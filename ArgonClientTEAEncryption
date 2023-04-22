@@ -1,6 +1,11 @@
-// Guide to Internet of Things Chapter 3 
+// Guide to Internet of Things Chapter 3
 // ArgonClientTEAEncryption
 // This Argon firmware demonstrates TEA encryption.
+
+// The code for the TEA algorithm is taken from the
+// textbook: Distributed Systems: Concepts and Design 3rd edition
+// by  George Coulouris, Jean Dollimore, Tim Kindberg, and Gordon Blair.
+
 
 #include <Base64RK.h>
 #include <HttpClient.h>
@@ -127,6 +132,7 @@ void setup() {
    delay(5000);
  }
 
+
 byte* encryptWithTEA(byte clearTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
 
     char Text[8];
@@ -158,6 +164,7 @@ byte* encryptWithTEA(byte clearTextBytes[], int lengthOfDataEncrypted, unsigned 
         }
     return cipherTextBytes;
 }
+
 
 byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
 
@@ -192,7 +199,7 @@ byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfDataEncrypted, unsigned
 }
 
 
-// TEA from Coulouris 3rd edition
+// TEA code from Distributed Systems: Concepts and Design 3rd edition
 void encryptTEA(unsigned long k[], unsigned long text[]) {
     unsigned long y = text[0], z = text[1];
     unsigned long delta = 0x9e3779b9, sum = 0;
@@ -205,7 +212,7 @@ void encryptTEA(unsigned long k[], unsigned long text[]) {
     text[0] = y;
     text[1] = z;
 }
-// TEA from Coulouris 3rd edition
+// TEA code from Distributed Systems: Concepts and Design 3rd edition
 void decryptTEA(unsigned long k[], unsigned long text[]) {
      unsigned long y = text[0], z = text[1];
      unsigned long delta = 0x9e3779b9, sum = delta << 5;
