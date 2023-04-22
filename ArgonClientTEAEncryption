@@ -141,7 +141,7 @@ void setup() {
     delay(5000);
  }
 
-
+// This routine makes preparations and calls on TEA encryption
 byte* encryptWithTEA(byte clearTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
 
     char Text[8];
@@ -174,7 +174,7 @@ byte* encryptWithTEA(byte clearTextBytes[], int lengthOfDataEncrypted, unsigned 
     return cipherTextBytes;
 }
 
-
+// This routine makes preparations and calls on TEA decryption
 byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
 
     char Text[8];
