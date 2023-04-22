@@ -6,37 +6,46 @@
 // textbook: Distributed Systems: Concepts and Design 3rd edition
 // by  George Coulouris, Jean Dollimore, Tim Kindberg, and Gordon Blair.
 
-
+// Include library for Base 64
 #include <Base64RK.h>
+
+// Include libray for HTTP requests
 #include <HttpClient.h>
 
 
-// Http related code
+// http is a variable of the class HttpClient
  HttpClient http;
 
+// Define a headers array holding two http_header_t objects.
  http_header_t headers[] = {
     { "Content-Type", "application/json" },
     { NULL, NULL }
  };
 
+// define a request object and a response object.
  http_request_t request;
  http_response_t response;
 
 
-// Argon related code
+// Set the photResistor to A0
 int photoResistor = A0;
+
+// The analog value begins at 0
 int analogValue = 0;
+
+// Hold the device ID
 char deviceID[60];
 
-
+// Do setup once.
 void setup() {
 
    Serial.begin(9600);
 
+   // the IP address and port of the server we will visit
    request.ip = IPAddress(192,168,86,164);
    request.port = 3000;
 
-   //deviceID = System.deviceID().c_str();
+   // the deviceID is found by calling System.deviceID().c_str();
    strcpy(deviceID,System.deviceID().c_str());
    Serial.printlnf("This device has the cool id %s", deviceID);
 
@@ -49,7 +58,7 @@ void setup() {
    Serial.println(response.body);
  }
 
-
+ // perform an HTTP post request
  void doPostRequest(char encryptedByteArrayBase64[]) {
 
    // Provide the path to the service
@@ -68,10 +77,10 @@ void setup() {
    // show response
    printResponse(response);
  }
-
-
+ // loop() is called repeatedly by the operating system
  void loop() {
 
+    // read the analog value from the photo resistor
     analogValue = analogRead(photoResistor);
     Serial.printlnf("AnalogValue == %u", analogValue);
 
@@ -87,10 +96,10 @@ void setup() {
     byte *clearTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte));
     for(int t = 0; t < lengthOfDataEncrypted; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
 
-
     // TEA needs four 32 but ints as key
     unsigned long key[] = {12,34,56,91};
 
+    // do the encryption
     byte* TEAcipherTextBytes = encryptWithTEA(clearTextBytes, lengthOfDataEncrypted, key) ;
 
     // compute the size of the encrypted data. Should always be a multiple of 8
@@ -102,6 +111,7 @@ void setup() {
 
     Serial.printlnf("LENGTH of DATA ENCRYPTED  == %d",  lengthOfDataEncrypted);
 
+    // check with decryption
     byte* TEAdecryptedCipherTextBytes = decryptWithTEA(TEAcipherTextBytes, lengthOfDataEncrypted, key) ;
 
      // Extract the bytes from the byte array into a newly allocated string
@@ -128,8 +138,7 @@ void setup() {
     free(TEAdecryptedClearText);
     free(TEAdecryptedCipherTextBytes);
 
-
-   delay(5000);
+    delay(5000);
  }
 
 
