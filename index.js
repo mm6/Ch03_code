@@ -8,7 +8,7 @@
 // The main purpose is to handle HTTP POST requests to the following URL:
 // http://localhost:3000/microcontrollerEvent
 
-// Each visit logs data to the file ArgonLogger.txt.
+// Each visit logs data to the file MicrocontrollerLogger.txt.
 
 // Setup the express web server.
 const express = require('express')
@@ -25,9 +25,9 @@ const port = 3000
 // So, we need access to the file system of this server.
 // We will use {flags:'a'} because we want to append to the log file.
 // If the file does not exist, it will be created.
-// The file name is ArgonLogger.txt.
+// The file name is MicrocontrollerLogger.txt.
 var fs = require('fs');
-var stream = fs.createWriteStream("ArgonLogger.txt", {flags:'a'});
+var stream = fs.createWriteStream("MicrocontrollerLogger.txt", {flags:'a'});
 
 // Set up a listener and display a note to the console.
 app.listen(port, () => {
@@ -37,7 +37,7 @@ app.listen(port, () => {
 // Used this variable to count visitors
 var visitor = 0;
 
-// Handle an HTTP POST request from an Argon microcontroller.
+// Handle an HTTP POST request from an Microcontroller microcontroller.
 app.post('/microcontrollerEvent', (req, res) => {
 
   // announce a new visitor

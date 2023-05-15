@@ -1,6 +1,6 @@
 // Guide to Inernet of Things Chapter 3
-// ArgonClientOTPEncryption
-// This Argon firmware demonstrates One Time Pad encryption.
+// MicrocontrollerClientOTPEncryption
+// This Microcontroller firmware demonstrates One Time Pad encryption.
 
 #include <Base64RK.h>
 #include <HttpClient.h>
@@ -85,7 +85,7 @@ void setup() {
 
     // clear text message local to the device
     char clearText[80];
-    sprintf(clearText, "Argon ID = %s Light sensor value = %d", deviceID, analogValue);
+    sprintf(clearText, "Microcontroller ID = %s Light sensor value = %d", deviceID, analogValue);
     Serial.printlnf("Clear text: %s",clearText);
 
      // determine its length of the string holding the clear text

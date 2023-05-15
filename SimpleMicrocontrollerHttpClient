@@ -1,5 +1,5 @@
 // Guide to Internet of Things Chapter 3
-// File name: SimpleArgonHttpClient
+// File name: SimpleMicrocontrollerHttpClient
 
 // This is a simple HTTP client that makes periodic visits on an HTTP
 // server. It sends a message in JSON format using an HTTP POST request.

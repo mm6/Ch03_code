@@ -1,6 +1,6 @@
 // Guide to Internet of Things Chapter 3
-// ArgonClientTEAEncryption
-// This Argon firmware demonstrates TEA encryption.
+// MicrocontrollerClientTEAEncryption
+// This Microcontroller firmware demonstrates TEA encryption.
 
 // This code is for instructional and demonstration use only. In general, it is a
 // bad idea to write your own cryptographic. Use open source standard libraries.
@@ -102,7 +102,7 @@ void setup() {
     // This clear text message will be held local to the device.
     char clearText[80];
     // Use sprintf to copy a formatted string into the clearText array.
-    sprintf(clearText, "Argon ID = %s  Light sensor = %d", deviceID, analogValue);
+    sprintf(clearText, "Microcontroller ID = %s  Light sensor = %d", deviceID, analogValue);
     Serial.printlnf("Clear text: %s",clearText);
 
      // determine the length of the string holding the clear text
