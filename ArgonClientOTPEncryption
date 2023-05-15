@@ -6,30 +6,46 @@
 #include <HttpClient.h>
 
 
-// Http related code
+// Define an http client object.
  HttpClient http;
 
+ // Define a headers array holding two http_header_t objects.
+ // Our request will include a JSON string. We inform the receiver
+ // that it should expect to see JSON.
  http_header_t headers[] = {
     { "Content-Type", "application/json" },
     { NULL, NULL }
  };
-
+ // Define an HTTP request object and an HTTP response object.
+ // These objects hold the HTTP request and response.
  http_request_t request;
  http_response_t response;
 
-// Argon related code
+// The photo resistor is on pin A0
 int photoResistor = A0;
+
+// We define a variable to hold the analog value.
 int analogValue = 0;
+
+// We define a variable to hold the device ID.
 char deviceID[60];
 
+// Setup is performed once on start up.
 void setup() {
 
+   // We prepare to write to the serial port.
    Serial.begin(9600);
 
+   // In the request object, set the IP address and port of the server that
+   // we will visit.
    request.ip = IPAddress(192,168,86,164);
    request.port = 3000;
 
+   // The deviceID is found by calling System.deviceID().c_str();
+   // Here, we copy the device ID into the character array named deviceID.
    strcpy(deviceID,System.deviceID().c_str());
+
+   // For debugging, write to the console over the serial port.
    Serial.printlnf("This device has the id %s", deviceID);
 
  }
@@ -73,11 +89,11 @@ void setup() {
     Serial.printlnf("Clear text: %s",clearText);
 
      // determine its length of the string holding the clear text
-    int lengthOfDataEncrypted = strlen(clearText);
+    int lengthOfClearText = strlen(clearText);
 
     // Allocate space and move clear text into a byte array
-    byte *clearTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte));
-    for(int t = 0; t < lengthOfDataEncrypted; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
+    byte *clearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
+    for(int t = 0; t < lengthOfClearText; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
 
     // The key is local to the device
     char key[] = "This must be truly random, as long as the clear text and used only once.";
@@ -90,18 +106,17 @@ void setup() {
     for(int t = 0; t < lengthOfKey; t = t + 1) keyBytes[t] = (byte) key[t];
 
     // Encrypt the clear text bytes using a one time pad and a key
-    byte* cipherTextBytes = encrypt(clearTextBytes,lengthOfDataEncrypted,keyBytes,lengthOfKey);
-
+    byte* cipherTextBytes = encrypt(clearTextBytes,lengthOfClearText,keyBytes,lengthOfKey);
 
     // Decrypt the result into an array of bytes for testing
-    byte *decryptedClearTextBytes = decrypt(cipherTextBytes,lengthOfDataEncrypted,keyBytes,lengthOfKey);
+    byte *decryptedClearTextBytes = decrypt(cipherTextBytes,lengthOfClearText,keyBytes,lengthOfKey);
 
     // Extract the bytes from the byte array into a newly allocated string
-    char *decryptedClearText = (char *)calloc(lengthOfDataEncrypted + 1, sizeof(byte));
-    for(int k = 0; k < lengthOfDataEncrypted; k = k + 1) decryptedClearText[k] = (char) decryptedClearTextBytes[k];
+    char *decryptedClearText = (char *)calloc(lengthOfClearText + 1, sizeof(byte));
+    for(int k = 0; k < lengthOfClearText; k = k + 1) decryptedClearText[k] = (char) decryptedClearTextBytes[k];
 
     // add the null byte back. The null byte was not part of the data that was encrypted
-    decryptedClearText[lengthOfDataEncrypted +1] = '\0';
+    decryptedClearText[lengthOfClearText +1] = '\0';
 
     // Show the result for testing
     Serial.printlnf("Decrypted clear text: %s",decryptedClearText);
@@ -114,23 +129,25 @@ void setup() {
     free(decryptedClearText);
 
     // encode a byte array in Base64
-   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfDataEncrypted, true);
+   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfClearText, true);
    char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
-   Base64::encode(cipherTextBytes, lengthOfDataEncrypted, encryptedByteArrayBase64, sizeOfBase64, true );
+   Base64::encode(cipherTextBytes, lengthOfClearText, encryptedByteArrayBase64, sizeOfBase64, true );
    Serial.println(encryptedByteArrayBase64);
 
    // Make an HTTP Post request along with JSON containing encrypted data
    doPostRequest(encryptedByteArrayBase64);
 
+   // Should we free encryptedByteArrayBase64
+   // Should we add timing logic instead of delay(5000);
    delay(5000);
  }
 
 // One time pad encryption
-byte* encrypt(byte clearTextBytes[], int lengthOfDataEncrypted, byte keyBytes[], int lengthOfKey) {
+byte* encrypt(byte clearTextBytes[], int lengthOfClearText, byte keyBytes[], int lengthOfKey) {
 
      int keyIndex = 0;
-     byte *cipherTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte) );
-     for (int index = 0; index < (lengthOfDataEncrypted); index = index + 1) {
+     byte *cipherTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte) );
+     for (int index = 0; index < (lengthOfClearText); index = index + 1) {
          cipherTextBytes[index] = clearTextBytes[index] ^ keyBytes[keyIndex];
          // rotate through the key
          keyIndex = (keyIndex + 1) % lengthOfKey;
@@ -139,11 +156,11 @@ byte* encrypt(byte clearTextBytes[], int lengthOfDataEncrypted, byte keyBytes[],
 }
 
 // One time pad decryption
-byte* decrypt(byte cipherTextBytes[], int lengthOfDataEncrypted, byte keyBytes[], int lengthOfKey) {
+byte* decrypt(byte cipherTextBytes[], int lengthOfClearText, byte keyBytes[], int lengthOfKey) {
 
      int keyIndex = 0;
-     byte *decryptedClearTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte));
-     for (int index = 0; index < (lengthOfDataEncrypted); index = index + 1) {
+     byte *decryptedClearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
+     for (int index = 0; index < (lengthOfClearText); index = index + 1) {
          decryptedClearTextBytes[index] = cipherTextBytes[index] ^ keyBytes[keyIndex];
          // rotate through the key
          keyIndex = (keyIndex + 1) % lengthOfKey;

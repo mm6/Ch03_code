@@ -2,9 +2,17 @@
 // ArgonClientTEAEncryption
 // This Argon firmware demonstrates TEA encryption.
 
+// This code is for instructional and demonstration use only. In general, it is a
+// bad idea to write your own cryptographic. Use open source standard libraries.
+// This code is provided for instructional purposes only and should
+// not be used in a real system.
+
 // The code for the TEA algorithm is taken from the
 // textbook: Distributed Systems: Concepts and Design 3rd edition
 // by  George Coulouris, Jean Dollimore, Tim Kindberg, and Gordon Blair.
+
+// TEA was released into the public domain by David Wheeler and Roger Needham.
+// See https://en.wikipedia.org/wiki/Tiny_Encryption_Algorithm
 
 // Include library for Base 64
 #include <Base64RK.h>
@@ -12,53 +20,60 @@
 // Include libray for HTTP requests
 #include <HttpClient.h>
 
-
 // http is a variable of the class HttpClient
  HttpClient http;
 
 // Define a headers array holding two http_header_t objects.
+// Our request will include a JSON string. We inform the receiver
+// that it should expect to see JSON.
  http_header_t headers[] = {
     { "Content-Type", "application/json" },
     { NULL, NULL }
  };
 
-// define a request object and a response object.
+// Define an HTTP request object and an HTTP response object.
+// These objects hold the HTTP request and response.
  http_request_t request;
  http_response_t response;
-
 
 // Set the photResistor to A0
 int photoResistor = A0;
 
-// The analog value begins at 0
+// The analog value begins at 0.
 int analogValue = 0;
 
-// Hold the device ID
+// Use this char array to hold the device ID
 char deviceID[60];
 
-// Do setup once.
+// Setup is performed once on start up.
 void setup() {
 
+   // We will communicate over the serial port.
    Serial.begin(9600);
 
-   // the IP address and port of the server we will visit
+   // In the request object, set the IP address and port of the server that
+   // we will visit.
    request.ip = IPAddress(192,168,86,164);
    request.port = 3000;
 
-   // the deviceID is found by calling System.deviceID().c_str();
+   // The deviceID is found by calling System.deviceID().c_str();
+   // Here, we copy the device ID into the character array named deviceID.
    strcpy(deviceID,System.deviceID().c_str());
+   // For debugging, display the device ID on the console.
    Serial.printlnf("This device has the cool id %s", deviceID);
 
  }
 
- // Provided with a response, display it to the command line interface.
+ // Provided with a response, display it to the command line console..
+ // &response is a reference to the HTTP response.
  void printResponse(http_response_t &response) {
    Serial.println("HTTP Response: ");
    Serial.println(response.status);
    Serial.println(response.body);
  }
 
- // perform an HTTP post request
+ // Perform an HTTP post request.
+ // The data provided, within the JSON message, is in Base 64 notation.
  void doPostRequest(char encryptedByteArrayBase64[]) {
 
    // Provide the path to the service
@@ -72,9 +87,9 @@ void setup() {
    strcat(json,"\"}");
    // assign the JSON string to the HTTP request body
    request.body = json;
-   // post the request
+   // post the request and block and wait for a response.
    http.post(request, response, headers);
-   // show response
+   // show response once it arrives
    printResponse(response);
  }
  // loop() is called repeatedly by the operating system
@@ -84,49 +99,52 @@ void setup() {
     analogValue = analogRead(photoResistor);
     Serial.printlnf("AnalogValue == %u", analogValue);
 
-    // clear text message local to the device
+    // This clear text message will be held local to the device.
     char clearText[80];
+    // Use sprintf to copy a formatted string into the clearText array.
     sprintf(clearText, "Argon ID = %s  Light sensor = %d", deviceID, analogValue);
     Serial.printlnf("Clear text: %s",clearText);
 
-     // determine its length of the string holding the clear text
-    int lengthOfDataEncrypted = strlen(clearText);
+     // determine the length of the string holding the clear text
+    int lengthOfClearText = strlen(clearText);
 
-    // Allocate space and move clear text into a byte array
-    byte *clearTextBytes = (byte *)calloc(lengthOfDataEncrypted, sizeof(byte));
-    for(int t = 0; t < lengthOfDataEncrypted; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
+    // Allocate space and move clear text into a byte array.
+    // We do this because we want to encrypt the byte array.
+    byte *clearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
+    for(int t = 0; t < lengthOfClearText; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
 
-    // TEA needs four 32 but ints as key
+    // TEA needs four 32 bit ints as key. The key should be 128 bits of random data.
+    // Here, we just use four integers as our key.
     unsigned long key[] = {12,34,56,91};
 
     // do the encryption
-    byte* TEAcipherTextBytes = encryptWithTEA(clearTextBytes, lengthOfDataEncrypted, key) ;
+    byte* TEAcipherTextBytes = encryptWithTEA(clearTextBytes, lengthOfClearText, key) ;
 
-    // compute the size of the encrypted data. Should always be a multiple of 8
-    // the encryption logic may add bytes to the end
-    int numEights = lengthOfDataEncrypted / 8;
-    if(lengthOfDataEncrypted != (numEights * 8)) {
-        lengthOfDataEncrypted = lengthOfDataEncrypted + ( 8 - (lengthOfDataEncrypted % 8));
+    // Here, we compute the size of the encrypted data.
+    // The encryption logic may add bytes to the end.
+    int numEights = lengthOfClearText / 8;
+    if(lengthOfClearText != (numEights * 8)) {
+        lengthOfClearText = lengthOfClearText + ( 8 - (lengthOfClearText % 8));
     }
 
-    Serial.printlnf("LENGTH of DATA ENCRYPTED  == %d",  lengthOfDataEncrypted);
+    Serial.printlnf("LENGTH of DATA ENCRYPTED  == %d",  lengthOfClearText);
 
-    // check with decryption
-    byte* TEAdecryptedCipherTextBytes = decryptWithTEA(TEAcipherTextBytes, lengthOfDataEncrypted, key) ;
+    // Let's check that the decryption is correct.
+    byte* TEAdecryptedCipherTextBytes = decryptWithTEA(TEAcipherTextBytes, lengthOfClearText, key) ;
 
      // Extract the bytes from the byte array into a newly allocated string
-    char *TEAdecryptedClearText = (char *)calloc(lengthOfDataEncrypted + 1, sizeof(byte));
+    char *TEAdecryptedClearText = (char *)calloc(lengthOfClearText + 1, sizeof(byte));
 
-    for(int k = 0; k < lengthOfDataEncrypted; k = k + 1) TEAdecryptedClearText[k] = (char) TEAdecryptedCipherTextBytes[k];
-    TEAdecryptedCipherTextBytes[lengthOfDataEncrypted+1] = '\0';
+    for(int k = 0; k < lengthOfClearText; k = k + 1) TEAdecryptedClearText[k] = (char) TEAdecryptedCipherTextBytes[k];
+    TEAdecryptedCipherTextBytes[lengthOfClearText+1] = '\0';
 
     Serial.printlnf("**** TEA: Decrypted clear text: %s",TEAdecryptedCipherTextBytes);
 
 
     // encode a byte array in Base64
-   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfDataEncrypted, true);
+   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfClearText, true);
    char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
-   Base64::encode(TEAdecryptedCipherTextBytes, lengthOfDataEncrypted, encryptedByteArrayBase64, sizeOfBase64, true );
+   Base64::encode(TEAdecryptedCipherTextBytes, lengthOfClearText, encryptedByteArrayBase64, sizeOfBase64, true );
    Serial.println(encryptedByteArrayBase64);
 
    doPostRequest(encryptedByteArrayBase64);
@@ -142,12 +160,12 @@ void setup() {
  }
 
 // This routine makes preparations and calls on TEA encryption
-byte* encryptWithTEA(byte clearTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
+byte* encryptWithTEA(byte clearTextBytes[], int lengthOfClearText, unsigned long k[]) {
 
     char Text[8];
-    int segments = lengthOfDataEncrypted / 8;
-    int over = lengthOfDataEncrypted % 8;
-    byte *cipherTextBytes = (byte *)calloc(lengthOfDataEncrypted+over, sizeof(byte) );
+    int segments = lengthOfClearText / 8;
+    int over = lengthOfClearText % 8;
+    byte *cipherTextBytes = (byte *)calloc(lengthOfClearText+over, sizeof(byte) );
     int cipherTextBytesPtr = 0;
 
     for(int i = 0; i < segments; i++) {
@@ -175,12 +193,13 @@ byte* encryptWithTEA(byte clearTextBytes[], int lengthOfDataEncrypted, unsigned 
 }
 
 // This routine makes preparations and calls on TEA decryption
-byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfDataEncrypted, unsigned long k[]) {
+
+byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfClearText, unsigned long k[]) {
 
     char Text[8];
-    int segments = lengthOfDataEncrypted / 8;
-    int over = lengthOfDataEncrypted % 8;
-    byte *decryptedCipherTextBytes = (byte *)calloc(lengthOfDataEncrypted+over, sizeof(byte) );
+    int segments = lengthOfClearText / 8;
+    int over = lengthOfClearText % 8;
+    byte *decryptedCipherTextBytes = (byte *)calloc(lengthOfClearText+over, sizeof(byte) );
     int decryptedCipherTextBytesPtr = 0;
 
     for(int i = 0; i < segments; i++) {
@@ -209,6 +228,10 @@ byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfDataEncrypted, unsigned
 
 
 // TEA code from Distributed Systems: Concepts and Design 3rd edition
+// An unsigned long is 4 bytes.
+// TEA operates on two 32-bit message blocks with a 128-bit key.
+// We make use of k[0], k[1], k[2], and k[3] for the key.
+// We encrypt two unsigned longs: text[0] and text[1].
 void encryptTEA(unsigned long k[], unsigned long text[]) {
     unsigned long y = text[0], z = text[1];
     unsigned long delta = 0x9e3779b9, sum = 0;
@@ -222,6 +245,9 @@ void encryptTEA(unsigned long k[], unsigned long text[]) {
     text[1] = z;
 }
 // TEA code from Distributed Systems: Concepts and Design 3rd edition
+// TEA operates on two 32-bit message blocks with a 128-bit key.
+// We make use of k[0], k[1], k[2], and k[3] for the key.
+// We decrypt two unsigned longs: text[0] and text[1].
 void decryptTEA(unsigned long k[], unsigned long text[]) {
      unsigned long y = text[0], z = text[1];
      unsigned long delta = 0x9e3779b9, sum = delta << 5;
@@ -231,5 +257,6 @@ void decryptTEA(unsigned long k[], unsigned long text[]) {
           y -= ((z << 4) + k[0]) ^ (z + sum) ^ ((z >> 5) + k[1]);
           sum -= delta;
      }
-     text[0] = y; text[1] = z;
+     text[0] = y;
+     text[1] = z;
 }
