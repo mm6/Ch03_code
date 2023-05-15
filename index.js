@@ -37,7 +37,7 @@ app.listen(port, () => {
 // Used this variable to count visitors
 var visitor = 0;
 
-// Handle an HTTP POST request from an Microcontroller microcontroller.
+// Handle an HTTP POST request from a microcontroller.
 app.post('/microcontrollerEvent', (req, res) => {
 
   // announce a new visitor
