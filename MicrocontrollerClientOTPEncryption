@@ -1,10 +1,14 @@
 // Guide to Inernet of Things Chapter 3
 // MicrocontrollerClientOTPEncryption
-// This Microcontroller firmware demonstrates One Time Pad encryption.
+// This microcontroller firmware demonstrates a simplified
+// example of one-time pad encryption.
 
+// The idea is to transmit messages to the server that are
+// encrypted with a simplified one-time pad.
+
+// Include header files for Base 64 and HTTP client classes.
 #include <Base64RK.h>
 #include <HttpClient.h>
-
 
 // Define an http client object.
  HttpClient http;
@@ -21,7 +25,8 @@
  http_request_t request;
  http_response_t response;
 
-// The photo resistor is on pin A0
+// The photoresistor is on pin A0. Messages to the server will
+// include values measured by the photoresistor.
 int photoResistor = A0;
 
 // We define a variable to hold the analog value.
@@ -30,6 +35,12 @@ int analogValue = 0;
 // We define a variable to hold the device ID.
 char deviceID[60];
 
+// The analogValue and deviceID are to be transmitted over the
+// network but kept private.
+
+// Establish a loop timer to hold a value in milliseconds.
+unsigned long loop_timer;
+
 // Setup is performed once on start up.
 void setup() {
 
@@ -37,7 +48,7 @@ void setup() {
    Serial.begin(9600);
 
    // In the request object, set the IP address and port of the server that
-   // we will visit.
+   // we will visit. This could be any IP address and port.
    request.ip = IPAddress(192,168,86,164);
    request.port = 3000;
 
@@ -48,16 +59,21 @@ void setup() {
    // For debugging, write to the console over the serial port.
    Serial.printlnf("This device has the id %s", deviceID);
 
+   // Set the time to the current time
+   loop_timer = millis();
+
  }
 
  // Provided with a response, display it to the command line interface.
+ // This procedure is called after a post request receives a response.
  void printResponse(http_response_t &response) {
    Serial.println("HTTP Response: ");
    Serial.println(response.status);
    Serial.println(response.body);
  }
 
-
+ // This procedure is called to send encrypted data to the
+ // server.
  void doPostRequest(char encryptedByteArrayBase64[]) {
 
    // Provide the path to the service
@@ -77,25 +93,36 @@ void setup() {
    printResponse(response);
  }
 
-
  void loop() {
 
+  // every 5 seconds do a post to the server
+  if(millis() - loop_timer >= 5000UL) {
+
+    // read the photoresistor
     analogValue = analogRead(photoResistor);
+    // for debugging, view the value on the local console
     Serial.printlnf("AnalogValue == %u", analogValue);
 
-    // clear text message local to the device
+    // This clear text data will be kept local to the device.
     char clearText[80];
+
+    // Use a built in procedure to copy a formatted string to the char array clearText.
     sprintf(clearText, "Microcontroller ID = %s Light sensor value = %d", deviceID, analogValue);
+
+    // For debugging, display the clear text.
     Serial.printlnf("Clear text: %s",clearText);
 
-     // determine its length of the string holding the clear text
+     // determine its length of the string holding the clear text.
     int lengthOfClearText = strlen(clearText);
 
     // Allocate space and move clear text into a byte array
     byte *clearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
     for(int t = 0; t < lengthOfClearText; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
 
-    // The key is local to the device
+    // The key is local to the device. In a real application, the key would be random
+    // and long enough to encrypt all of the data transmitted over time. No part of the
+    // key would ever be reused. In this simplified example, we reuse the same key.
+
     char key[] = "This must be truly random, as long as the clear text and used only once.";
 
     // determine its length
@@ -105,10 +132,12 @@ void setup() {
     byte *keyBytes = (byte *)calloc(lengthOfKey, sizeof(byte));
     for(int t = 0; t < lengthOfKey; t = t + 1) keyBytes[t] = (byte) key[t];
 
-    // Encrypt the clear text bytes using a one time pad and a key
+    // Encrypt the clear text bytes using a one time pad and the key.
+    // The resulting bytes are the cipher text.
     byte* cipherTextBytes = encrypt(clearTextBytes,lengthOfClearText,keyBytes,lengthOfKey);
 
-    // Decrypt the result into an array of bytes for testing
+    // Here, we check if the encryption is working.
+    // Decrypt the result into an array of bytes (for testing).
     byte *decryptedClearTextBytes = decrypt(cipherTextBytes,lengthOfClearText,keyBytes,lengthOfKey);
 
     // Extract the bytes from the byte array into a newly allocated string
@@ -128,40 +157,62 @@ void setup() {
     free(decryptedClearTextBytes);
     free(decryptedClearText);
 
-    // encode a byte array in Base64
+    // We want to store the encrypted data on the server in Base 64.
+    // Encode a byte array in Base64.
+    // First, use a library to learn the size of the base 64 data.
    size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfClearText, true);
+
+    // Allocate memory to hold the base 64 string.
    char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
+
+   // Use a library to perform the encoding.
+   // The one-time pad uses an xor which does not change to size of the cipher text.
+   // That is, the clear text size will equal the cipher text size.
    Base64::encode(cipherTextBytes, lengthOfClearText, encryptedByteArrayBase64, sizeOfBase64, true );
+
+   // For debugging, view the base 64 data.
    Serial.println(encryptedByteArrayBase64);
 
-   // Make an HTTP Post request along with JSON containing encrypted data
+   // Make an HTTP Post request along with JSON containing the encrypted data.
    doPostRequest(encryptedByteArrayBase64);
 
-   // Should we free encryptedByteArrayBase64
-   // Should we add timing logic instead of delay(5000);
-   delay(5000);
+   // Free memory.
+   free (encryptedByteArrayBase64);
+
+   // reset loop_timer
+   loop_timer = millis();
+   }
  }
 
-// One time pad encryption
+// One time pad encryption.
+// For each key byte and clear text byte, perform an xor operation.
+// In c or c++, this is the ^ symbol.
 byte* encrypt(byte clearTextBytes[], int lengthOfClearText, byte keyBytes[], int lengthOfKey) {
 
      int keyIndex = 0;
-     byte *cipherTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte) );
+     // Allocate room for the encrypted result.
+     byte *cipherBytes = (byte *)calloc(lengthOfClearText, sizeof(byte) );
+     // Visit each key byte and clear text byte.
      for (int index = 0; index < (lengthOfClearText); index = index + 1) {
-         cipherTextBytes[index] = clearTextBytes[index] ^ keyBytes[keyIndex];
+         // perform XOR
+         cipherBytes[index] = clearTextBytes[index] ^ keyBytes[keyIndex];
          // rotate through the key
          keyIndex = (keyIndex + 1) % lengthOfKey;
      }
-     return cipherTextBytes;
+     // return resulting cipher bytes.
+     return cipherBytes;
 }
 
-// One time pad decryption
-byte* decrypt(byte cipherTextBytes[], int lengthOfClearText, byte keyBytes[], int lengthOfKey) {
+// One time pad decryption.
+// Use xor again and we decrypt the cipher
+byte* decrypt(byte cipherBytes[], int lengthOfClearText, byte keyBytes[], int lengthOfKey) {
 
      int keyIndex = 0;
+     // Allocate room for the resulting clear text data.
      byte *decryptedClearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
+     // For each cipher byte and each key byte, perform an xor operation.
      for (int index = 0; index < (lengthOfClearText); index = index + 1) {
-         decryptedClearTextBytes[index] = cipherTextBytes[index] ^ keyBytes[keyIndex];
+         decryptedClearTextBytes[index] = cipherBytes[index] ^ keyBytes[keyIndex];
          // rotate through the key
          keyIndex = (keyIndex + 1) % lengthOfKey;
 
