@@ -123,7 +123,7 @@ void setup() {
     // and long enough to encrypt all of the data transmitted over time. No part of the
     // key would ever be reused. In this simplified example, we reuse the same key.
 
-    char key[] = "This must be truly random, as long as the clear text and used only once.";
+    char key[] = "This key should be truly random, be as long as the clear text, and used only once.";
 
     // determine its length
     int lengthOfKey = strlen(key);
