@@ -3,7 +3,7 @@
 // This Microcontroller firmware demonstrates TEA encryption.
 
 // This code is for instructional and demonstration use only. In general, it is a
-// bad idea to write your own cryptographic. Use open source standard libraries.
+// bad idea to write your own cryptographic. Use standard open source libraries.
 // This code is provided for instructional purposes only and should
 // not be used in a real system.
 
@@ -107,14 +107,17 @@ void setup() {
 
      // determine the length of the string holding the clear text
     int lengthOfClearText = strlen(clearText);
+    Serial.printlnf("Length of clear text: %d",lengthOfClearText);
 
     // Allocate space and move clear text into a byte array.
     // We do this because we want to encrypt the byte array.
-    byte *clearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
-    for(int t = 0; t < lengthOfClearText; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
-
+    // byte *clearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
+    // for(int t = 0; t < lengthOfClearText; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
+    byte *clearTextBytes = clearText;
+    
     // TEA needs four 32 bit ints as key. The key should be 128 bits of random data.
     // Here, we just use four integers as our key.
+
     unsigned long key[] = {12,34,56,91};
 
     // do the encryption
