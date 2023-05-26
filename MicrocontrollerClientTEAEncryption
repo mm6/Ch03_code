@@ -3,7 +3,7 @@
 // This Microcontroller firmware demonstrates TEA encryption.
 
 // This code is for instructional and demonstration use only. In general, it is a
-// bad idea to write your own cryptographic. Use standard open source libraries.
+// bad idea to write your own cryptographic. Use open source standard libraries.
 // This code is provided for instructional purposes only and should
 // not be used in a real system.
 
@@ -45,6 +45,10 @@ int analogValue = 0;
 // Use this char array to hold the device ID
 char deviceID[60];
 
+// Establish a loop timer to hold a value in milliseconds.
+unsigned long loop_timer;
+
+
 // Setup is performed once on start up.
 void setup() {
 
@@ -53,7 +57,7 @@ void setup() {
 
    // In the request object, set the IP address and port of the server that
    // we will visit.
-   request.ip = IPAddress(192,168,86,164);
+   request.ip = IPAddress(192,168,86,216);
    request.port = 3000;
 
    // The deviceID is found by calling System.deviceID().c_str();
@@ -61,6 +65,9 @@ void setup() {
    strcpy(deviceID,System.deviceID().c_str());
    // For debugging, display the device ID on the console.
    Serial.printlnf("This device has the cool id %s", deviceID);
+
+   // Set the time to the current time
+   loop_timer = millis();
 
  }
 
@@ -95,6 +102,9 @@ void setup() {
  // loop() is called repeatedly by the operating system
  void loop() {
 
+    // every 5 seconds do a post to the server
+  if(millis() - loop_timer >= 5000UL) {
+
     // read the analog value from the photo resistor
     analogValue = analogRead(photoResistor);
     Serial.printlnf("AnalogValue == %u", analogValue);
@@ -107,20 +117,16 @@ void setup() {
 
      // determine the length of the string holding the clear text
     int lengthOfClearText = strlen(clearText);
-    Serial.printlnf("Length of clear text: %d",lengthOfClearText);
 
-    // Allocate space and move clear text into a byte array.
-    // We do this because we want to encrypt the byte array.
-    // byte *clearTextBytes = (byte *)calloc(lengthOfClearText, sizeof(byte));
-    // for(int t = 0; t < lengthOfClearText; t = t + 1) clearTextBytes[t] = (byte) clearText[t];
-    byte *clearTextBytes = clearText;
-    
+    // Set a byte pointer to the clearText.
+    byte *clearTextBytes = (byte *) clearText;
+
+
     // TEA needs four 32 bit ints as key. The key should be 128 bits of random data.
     // Here, we just use four integers as our key.
-
     unsigned long key[] = {12,34,56,91};
 
-    // do the encryption
+    // do the encryption and point to the encrypeted data
     byte* TEAcipherTextBytes = encryptWithTEA(clearTextBytes, lengthOfClearText, key) ;
 
     // Here, we compute the size of the encrypted data.
@@ -153,13 +159,16 @@ void setup() {
    doPostRequest(encryptedByteArrayBase64);
 
     // Free up the memory that was allocated for the arrays.
-    free(clearTextBytes);
+
     free(encryptedByteArrayBase64);
     free(TEAcipherTextBytes);
     free(TEAdecryptedClearText);
     free(TEAdecryptedCipherTextBytes);
 
-    delay(5000);
+    // reset loop_timer
+   loop_timer = millis();
+
+   }
  }
 
 // This routine makes preparations and calls on TEA encryption
