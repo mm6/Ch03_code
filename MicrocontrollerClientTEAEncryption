@@ -103,16 +103,18 @@ void setup() {
  void loop() {
 
     // every 5 seconds do a post to the server
-  if(millis() - loop_timer >= 5000UL) {
+  if(millis() - loop_timer >= 10000UL) {
 
-    // read the analog value from the photo resistor
+    // read the analog value from the photodiode
     analogValue = analogRead(photoResistor);
     Serial.printlnf("AnalogValue == %u", analogValue);
 
     // This clear text message will be held local to the device.
     char clearText[80];
     // Use sprintf to copy a formatted string into the clearText array.
+    // The clearText is the text we want to encrypt.
     sprintf(clearText, "Microcontroller ID = %s  Light sensor = %d", deviceID, analogValue);
+
     Serial.printlnf("Clear text: %s",clearText);
 
      // determine the length of the string holding the clear text
@@ -121,49 +123,39 @@ void setup() {
     // Set a byte pointer to the clearText.
     byte *clearTextBytes = (byte *) clearText;
 
-
     // TEA needs four 32 bit ints as key. The key should be 128 bits of random data.
-    // Here, we just use four integers as our key.
+    // Here, we just use four integers as our key. This approach is not secure.
+    // TEA is a symmetric cipher and so we will use the same key for encryption
+    // and decryption.
     unsigned long key[] = {12,34,56,91};
 
-    // do the encryption and point to the encrypeted data
-    byte* TEAcipherTextBytes = encryptWithTEA(clearTextBytes, lengthOfClearText, key) ;
+    // Do the encryption and point to the encrypted data.
+    // clearTextBytes points to the data we intend to encrypt.
+    // The length of this text and the encryption key is also provided.
+    // The length of the padded and encrypted data is placed in encryptedSize.
+    int encryptedSize = 0;
+    byte* TEACipherBytes = padAndEncryptWithTEA(clearTextBytes, lengthOfClearText, &encryptedSize, key) ;
 
-    // Here, we compute the size of the encrypted data.
-    // The encryption logic may add bytes to the end.
-    int numEights = lengthOfClearText / 8;
-    if(lengthOfClearText != (numEights * 8)) {
-        lengthOfClearText = lengthOfClearText + ( 8 - (lengthOfClearText % 8));
+    // Here, we call on decryptAndUnpad to decrypt the encrypted data and removing the padding.
+
+    byte *decryptedClearTextBytes =  decryptAndUnpad(TEACipherBytes, encryptedSize, key);
+
+    // Compare the decrypted data with the original.
+    char *decryptedString = (char *) decryptedClearTextBytes;
+
+    Serial.printlnf("Clear text after decryption : %s",decryptedString );
+
+    if(strcmp(decryptedString,clearText) == 0) {
+      Serial.println("Strings matched");
     }
-
-    Serial.printlnf("LENGTH of DATA ENCRYPTED  == %d",  lengthOfClearText);
-
-    // Let's check that the decryption is correct.
-    byte* TEAdecryptedCipherTextBytes = decryptWithTEA(TEAcipherTextBytes, lengthOfClearText, key) ;
-
-     // Extract the bytes from the byte array into a newly allocated string
-    char *TEAdecryptedClearText = (char *)calloc(lengthOfClearText + 1, sizeof(byte));
-
-    for(int k = 0; k < lengthOfClearText; k = k + 1) TEAdecryptedClearText[k] = (char) TEAdecryptedCipherTextBytes[k];
-    TEAdecryptedCipherTextBytes[lengthOfClearText+1] = '\0';
-
-    Serial.printlnf("**** TEA: Decrypted clear text: %s",TEAdecryptedCipherTextBytes);
-
-
-    // encode a byte array in Base64
-   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfClearText, true);
-   char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
-   Base64::encode(TEAdecryptedCipherTextBytes, lengthOfClearText, encryptedByteArrayBase64, sizeOfBase64, true );
-   Serial.println(encryptedByteArrayBase64);
-
-   doPostRequest(encryptedByteArrayBase64);
+    else {
+      Serial.println("Error: Strings not matched");
+    }
 
     // Free up the memory that was allocated for the arrays.
 
-    free(encryptedByteArrayBase64);
-    free(TEAcipherTextBytes);
-    free(TEAdecryptedClearText);
-    free(TEAdecryptedCipherTextBytes);
+    free(TEACipherBytes);
+    free(decryptedClearTextBytes);
 
     // reset loop_timer
    loop_timer = millis();
@@ -171,80 +163,87 @@ void setup() {
    }
  }
 
-// This routine makes preparations and calls on TEA encryption
-byte* encryptWithTEA(byte clearTextBytes[], int lengthOfClearText, unsigned long k[]) {
+// This routine adds padding to the data to be encrypted and calls TEA
+// to perform the encryption.
+byte* padAndEncryptWithTEA(byte clearTextBytes[], int lengthOfClearText, int *encryptedSize, unsigned long k[]) {
 
-    char Text[8];
-    int segments = lengthOfClearText / 8;
-    int over = lengthOfClearText % 8;
-    byte *cipherTextBytes = (byte *)calloc(lengthOfClearText+over, sizeof(byte) );
-    int cipherTextBytesPtr = 0;
 
-    for(int i = 0; i < segments; i++) {
-            int p = i * 8;
-            for(int b = 0; b < 8; b++) {
-                Text[b] = clearTextBytes[p+b];
-            }
-            // Call encrypt on Text
-            encryptTEA(k,(unsigned long *)Text);
-            for(int ctr = 0; ctr < 8; ctr++) {
-                cipherTextBytes[cipherTextBytesPtr++] = Text[ctr];
-            }
-        }
-        if(over > 0) {
-            for (int m = 0; m < 8; m++) Text[m] = ' ';
-            for (int b = 0; b < over; b++) {
-                Text[b] = clearTextBytes[(segments*8) + b];
-            }
-            encryptTEA(k,(unsigned long *)Text);
-            for(int ctr = 0; ctr < 8; ctr++) {
-                cipherTextBytes[cipherTextBytesPtr++] = Text[ctr];
-            }
-        }
-    return cipherTextBytes;
+    // Set n to the number of bytes in clearTextBytes (include the null byte).
+    int n = lengthOfClearText + 1;
+
+    // Create an array to hold the padded data
+    // The array is of size (n / 8 + 1) * 8
+    // The *encryptedSize is evenly divisible by 8
+    *encryptedSize = (n / 8 + 1) * 8;
+    byte *pa = (byte *)calloc(*encryptedSize, sizeof(byte));
+
+    // Copy bytes to the new, padded array.
+    for(int i = 0; i < n; i++) pa[i] = clearTextBytes[i];
+    // Set any extra bytes to 0
+    for(int i = n; i < *encryptedSize; i++) pa[i] = 0;
+    // Set the rightmost byte to to the number of padding bytes
+    pa[*encryptedSize - 1 ] = *encryptedSize - n;
+
+    // set an unsigned long pointer to the padded data
+    unsigned long *paddedArrayPointer = (unsigned long *)pa;
+
+    // Call TEA for each pair of unsigned longs in the padded array.
+    int numCalls = *encryptedSize / 8;
+    for (int i = 0; i < numCalls; i++) {
+         encryptTEA(k,paddedArrayPointer);
+         paddedArrayPointer = paddedArrayPointer + 2;
+
+    }
+    return pa;
 }
 
-// This routine makes preparations and calls on TEA decryption
+// Decrypt the TEACipherBytes using the key provided.
+// Remove the padding and return a newly allocated array of clear text bytes.
 
-byte* decryptWithTEA(byte cipherTextBytes[], int lengthOfClearText, unsigned long k[]) {
+byte * decryptAndUnpad(byte * TEACipherBytes, int encryptedSize, unsigned long key[]) {
 
-    char Text[8];
-    int segments = lengthOfClearText / 8;
-    int over = lengthOfClearText % 8;
-    byte *decryptedCipherTextBytes = (byte *)calloc(lengthOfClearText+over, sizeof(byte) );
-    int decryptedCipherTextBytesPtr = 0;
+   // First, decrypt the TEACipherBytes
+   // Call TEA for each pair of unsigned longs in the padded array.
 
-    for(int i = 0; i < segments; i++) {
-            int p = i * 8;
-            for(int b = 0; b < 8; b++) {
-                Text[b] = cipherTextBytes[p+b];
-            }
-            // Call decrypt on Text
-            decryptTEA(k,(unsigned long *)Text);
-            for(int ctr = 0; ctr < 8; ctr++) {
-                decryptedCipherTextBytes[decryptedCipherTextBytesPtr++] = Text[ctr];
-            }
-    }
-    if(over > 0) {
-            for (int m = 0; m < 8; m++) Text[m] = ' ';
-            for (int b = 0; b < over; b++) {
-                Text[b] = cipherTextBytes[(segments*8) + b];
-            }
-            decryptTEA(k,(unsigned long *)Text);
-            for(int ctr = 0; ctr < 8; ctr++) {
-                decryptedCipherTextBytes[decryptedCipherTextBytesPtr++] = Text[ctr];
-            }
-    }
-    return decryptedCipherTextBytes;
+   // set an unsigned long pointer to the padded data
+   unsigned long *paddedArrayPointer = (unsigned long *)TEACipherBytes;
+
+   // *encryptedSize is divisible by 8
+   // call decrypt and each call handles 8 bytes
+   int numCalls = encryptedSize / 8;
+   for (int i = 0; i < numCalls; i++) {
+        decryptTEA(key,paddedArrayPointer);
+        paddedArrayPointer = paddedArrayPointer + 2;
+
+   }
+   // The data in TEACipherBytes is decrypted
+   // The last byte has the number of padding bytes to remove
+   int padToRemove = TEACipherBytes[encryptedSize-1];
+
+   // Compute the number of bytes we are interested in
+   int n = encryptedSize - padToRemove;
+
+   // allocate room for n bytes
+   byte *clearTextByteArray = (byte *)calloc(n, sizeof(byte));
+
+   // Copy the bytes we are interested in into the clearTextByteArray
+   for(int i = 0; i < n; i++) clearTextByteArray[i] = TEACipherBytes[i];
+
+   // Return the clear text bytes
+   return clearTextByteArray;
+
 }
 
 
 // TEA code from Distributed Systems: Concepts and Design 3rd edition
-// An unsigned long is 4 bytes.
+
 // TEA operates on two 32-bit message blocks with a 128-bit key.
 // We make use of k[0], k[1], k[2], and k[3] for the key.
 // We encrypt two unsigned longs: text[0] and text[1].
+// An unsigned long is 4 bytes.
+// So, we are encrypting 8 bytes.
 void encryptTEA(unsigned long k[], unsigned long text[]) {
+
     unsigned long y = text[0], z = text[1];
     unsigned long delta = 0x9e3779b9, sum = 0;
     int n;
@@ -257,10 +256,14 @@ void encryptTEA(unsigned long k[], unsigned long text[]) {
     text[1] = z;
 }
 // TEA code from Distributed Systems: Concepts and Design 3rd edition
+
 // TEA operates on two 32-bit message blocks with a 128-bit key.
 // We make use of k[0], k[1], k[2], and k[3] for the key.
 // We decrypt two unsigned longs: text[0] and text[1].
+// An unsigned long is 4 bytes.
+// So, we are decrypting 8 bytes.
 void decryptTEA(unsigned long k[], unsigned long text[]) {
+
      unsigned long y = text[0], z = text[1];
      unsigned long delta = 0x9e3779b9, sum = delta << 5;
      int n;
