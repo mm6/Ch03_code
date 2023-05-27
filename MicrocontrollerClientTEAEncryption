@@ -152,6 +152,18 @@ void setup() {
       Serial.println("Error: Strings not matched");
     }
 
+     // encode a byte array in Base64
+   /*
+   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfClearText, true);
+   char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
+   Base64::encode(TEAdecryptedCipherTextBytes, lengthOfClearText, encryptedByteArrayBase64, sizeOfBase64, true );
+   Serial.println(encryptedByteArrayBase64);
+
+   doPostRequest(encryptedByteArrayBase64);
+   */
+
+
+
     // Free up the memory that was allocated for the arrays.
 
     free(TEACipherBytes);
