@@ -48,7 +48,6 @@ char deviceID[60];
 // Establish a loop timer to hold a value in milliseconds.
 unsigned long loop_timer;
 
-
 // Setup is performed once on start up.
 void setup() {
 
@@ -172,8 +171,7 @@ void setup() {
    // Post the encrypted data in base 64 to the web server
    doPostRequest(encryptedByteArrayBase64);
 
-
-    // Free up the memory that was allocated for the arrays.
+   // Free up the memory that was allocated for the arrays.
 
     free(TEACipherBytes);
     free(decryptedClearTextBytes);
@@ -181,14 +179,12 @@ void setup() {
 
     // reset loop_timer
    loop_timer = millis();
-
    }
  }
 
 // This routine adds padding to the data to be encrypted and calls TEA
 // to perform the encryption.
 byte* padAndEncryptWithTEA(byte clearTextBytes[], int lengthOfClearText, int *encryptedSize, unsigned long k[]) {
-
 
     // Set n to the number of bytes in clearTextBytes (include the null byte).
     int n = lengthOfClearText + 1;
@@ -257,7 +253,6 @@ byte * decryptAndUnpad(byte * TEACipherBytes, int encryptedSize, unsigned long k
    return clearTextByteArray;
 
 }
-
 
 // TEA code from Distributed Systems: Concepts and Design 3rd edition
 
