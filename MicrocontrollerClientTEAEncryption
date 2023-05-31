@@ -3,7 +3,7 @@
 // This Microcontroller firmware demonstrates TEA encryption.
 
 // This code is for instructional and demonstration use only. In general, it is a
-// bad idea to write your own cryptographic. Use open source standard libraries.
+// bad idea to write your own cryptography. Use open source standard libraries.
 // This code is provided for instructional purposes only and should
 // not be used in a real system.
 
@@ -64,7 +64,7 @@ void setup() {
    // Here, we copy the device ID into the character array named deviceID.
    strcpy(deviceID,System.deviceID().c_str());
    // For debugging, display the device ID on the console.
-   Serial.printlnf("This device has the cool id %s", deviceID);
+   Serial.printlnf("This device has the id of %s", deviceID);
 
    // Set the time to the current time
    loop_timer = millis();
@@ -137,6 +137,7 @@ void setup() {
     byte* TEACipherBytes = padAndEncryptWithTEA(clearTextBytes, lengthOfClearText, &encryptedSize, key) ;
 
     // Here, we call on decryptAndUnpad to decrypt the encrypted data and removing the padding.
+    // We do this to test that encryption is working properly.
 
     byte *decryptedClearTextBytes =  decryptAndUnpad(TEACipherBytes, encryptedSize, key);
 
@@ -146,28 +147,37 @@ void setup() {
     Serial.printlnf("Clear text after decryption : %s",decryptedString );
 
     if(strcmp(decryptedString,clearText) == 0) {
+      // The decrypted data matched the original clear text.
       Serial.println("Strings matched");
     }
     else {
+      // The strings did not match and so there is a problem with
+      // the encryption or decryption.
       Serial.println("Error: Strings not matched");
     }
 
-     // encode a byte array in Base64
-   /*
-   size_t sizeOfBase64 = Base64::getEncodedSize(lengthOfClearText, true);
+   // Encode the encrypted byte array in Base64
+
+   // First, find the size of the base 64 data.
+   size_t sizeOfBase64 = Base64::getEncodedSize(encryptedSize, true);
+   // Second, allocate room for the base 64 data.
    char * encryptedByteArrayBase64 = (char *)calloc(sizeOfBase64, sizeof(char));
-   Base64::encode(TEAdecryptedCipherTextBytes, lengthOfClearText, encryptedByteArrayBase64, sizeOfBase64, true );
-   Serial.println(encryptedByteArrayBase64);
 
+   // Use a library to do the encoding from binary to base 64.
+   Base64::encode(TEACipherBytes, encryptedSize, encryptedByteArrayBase64, sizeOfBase64, true );
+
+   // Display the encrypted data in base 64 on the console.
+   Serial.printlnf("Encrypted data in Base 64 %s",encryptedByteArrayBase64);
+
+   // Post the encrypted data in base 64 to the web server
    doPostRequest(encryptedByteArrayBase64);
-   */
-
 
 
     // Free up the memory that was allocated for the arrays.
 
     free(TEACipherBytes);
     free(decryptedClearTextBytes);
+    free(encryptedByteArrayBase64);
 
     // reset loop_timer
    loop_timer = millis();
